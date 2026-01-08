@@ -36,6 +36,13 @@ def ask_gemini(prompt, key):
 if "page" not in st.session_state:
     st.session_state.page = "Home"
 
+# Initialize Investor Pool
+if "investor_pool" not in st.session_state:
+    st.session_state.investor_pool = 5000  # Starting liquidity pool
+
+if "investor_investments" not in st.session_state:
+    st.session_state.investor_investments = []
+
 # --- 2. ADVANCED CSS (Aesthetic & Animations) ---
 st.markdown("""
     <style>
@@ -92,12 +99,17 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. SIDEBAR (Profile Only - No Menu) ---
+# --- 3. SIDEBAR (Profile & Global Settings) ---
 with st.sidebar:
     st.title("🌱 GroFlow")
     st.image("https://api.dicebear.com/9.x/micah/svg?seed=Felix", width=100)
     st.write("**Hello, Sarah!**")
     st.caption("Owner: Sarah's Cakes")
+    
+    # --- GLOBAL API KEY INPUT (The Fix) ---
+    st.write("---")
+    # This 'key="api_key"' argument automatically saves the input to st.session_state
+    st.text_input("🔑 Enter Gemini API Key", type="password", key="api_key")
     
     if "points" not in st.session_state:
         st.session_state.points = 120
@@ -110,7 +122,6 @@ with st.sidebar:
     if st.button("🏠 Back to Home"):
         st.session_state.page = "Home"
         st.rerun()
-
 # --- 4. PAGE ROUTING LOGIC ---
 
 # ==========================================
@@ -127,13 +138,13 @@ if st.session_state.page == "Home":
         Select a module below to start automating your business.
         """)
     with col2:
-        st.image("https://img.freepik.com/free-vector/organic-farming-concept_23-2148425232.jpg?w=740", use_container_width=True)
+        st.image("smallbusiness.jpg", use_container_width=True)
 
     st.write("---")
     st.subheader("Select a Module")
     
     # THE NEW NAVIGATION (Clickable Cards)
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     
     with c1:
         st.info("🤖 **AI Manager**")
@@ -155,15 +166,22 @@ if st.session_state.page == "Home":
         if st.button("Open Tracker →"):
             st.session_state.page = "Adaptive Tracker"
             st.rerun()
+    
+    with c4:
+        st.error("🏦 **Investor Portal**")
+        st.caption("Fund businesses & earn returns.")
+        if st.button("Access Investor Hub →"):
+            st.session_state.page = "Investor Portal"
+            st.rerun()
 
 # ==========================================
-# PAGE: AI ASSISTANT (Fixed Error Handling & Model)
+# PAGE: AI ASSISTANT (Fixed)
 # ==========================================
 elif st.session_state.page == "AI Assistant":
     st.header("🤖 Constraint-Aware AI Assistant")
     st.caption("Your Virtual Business Manager")
     
-    api_key = st.sidebar.text_input("Enter Gemini API Key", type="password")
+    # WE REMOVED THE EXTRA INPUT HERE because it's now in the global sidebar
 
     tab_quick, tab_monthly = st.tabs(["⚡ Quick Micro-Actions", "📅 Monthly Strategic Plan"])
 
@@ -182,13 +200,17 @@ elif st.session_state.page == "AI Assistant":
                 task_type = st.selectbox("🎯 Focus Area", ["Sales/Revenue", "Brand Awareness", "Admin/Cleanup"])
 
             if st.button("⚡ Generate Quick Wins", type="primary"):
-                if not api_key:
-                    st.error("Please enter your API Key in the sidebar!")
+                # Check if the Global Key is missing
+                if "api_key" not in st.session_state or not st.session_state.api_key:
+                    st.error("Please enter your API Key in the sidebar first!")
                 else:
                     with st.spinner("Finding high-impact tasks..."):
                         try:
-                            # FIX 1: Switched to 'gemini-pro' (More reliable)
-                            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+                            # Use the Global Key
+                            key_to_use = st.session_state.api_key
+                            
+                            # Using 1.5 Flash (Most reliable model)
+                            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key_to_use}"
                             headers = {'Content-Type': 'application/json'}
                             
                             prompt = f"""
@@ -204,13 +226,11 @@ elif st.session_state.page == "AI Assistant":
                                 st.success("🚀 Ready to execute:")
                                 st.markdown(ai_text)
                             else:
-                                # FIX 2: Show the REAL error message
                                 st.error(f"⚠️ Error {response.status_code}: {response.text}")
                         except Exception as e:
                             st.error(f"Connection Error: {e}")
 
     # --- TAB 2: MONTHLY STRATEGY ---
-# --- TAB 2: MONTHLY STRATEGY (Interactive) ---
     with tab_monthly:
         st.markdown("#### Strategic Growth Engine")
         
@@ -224,13 +244,12 @@ elif st.session_state.page == "AI Assistant":
                 budget_monthly = st.number_input("💰 Total Budget ($)", 0, 10000, 500)
             
             if st.button("📅 Draft Interactive Roadmap"):
-                # Check for API Key in Session State
-                if "api_key" not in st.session_state or not st.session_state["api_key"]:
+                # Check Global Key
+                if "api_key" not in st.session_state or not st.session_state.api_key:
                     st.error("Please enter your API Key in the sidebar first!")
                 else:
                     with st.spinner("🤖 AI is designing your tracker..."):
                         
-                        # We demand JSON format so we can build checkboxes
                         prompt = f"""
                         Act as a Project Manager. 
                         Context: Business={business_desc}, Goal={goal_text}, Duration={duration} weeks, Budget=${budget_monthly}.
@@ -246,40 +265,37 @@ elif st.session_state.page == "AI Assistant":
                         """
                         
                         try:
-                            # 1. Get the Raw Text from AI
-                            ai_response_text = ask_gemini(prompt, st.session_state["api_key"])
+                            # Use Global Key
+                            key_to_use = st.session_state.api_key
+                            ai_response_text = ask_gemini(prompt, key_to_use)
                             
-                            # 2. Clean the text (sometimes AI adds ```json ... ``` wrappers)
+                            # Clean and Parse
                             clean_json = ai_response_text.replace("```json", "").replace("```", "").strip()
-                            
-                            # 3. Convert Text to Data
                             import json
                             roadmap_data = json.loads(clean_json)
                             
-                            # 4. Save to Session State (So it stays when we click checkboxes)
+                            # Save Plan
                             st.session_state["generated_roadmap"] = roadmap_data
                             st.rerun()
                             
                         except Exception as e:
                             st.error("AI generated text instead of data. Please try again.")
-                            st.write(ai_response_text) # Show the raw text just in case
+                            st.write(ai_response_text) # Debugging
 
-        # --- DISPLAY THE INTERACTIVE TRACKER ---
+        # Display Plan
         if "generated_roadmap" in st.session_state:
             st.divider()
             st.subheader(f"🚀 Your {duration}-Week Action Plan")
             st.caption("This is your custom-built tracker. Check off items as you go!")
             
-            # Loop through the data and build UI
             for phase in st.session_state["generated_roadmap"]:
                 with st.expander(f"📌 {phase['phase']}", expanded=True):
                     for task in phase['tasks']:
-                        st.checkbox(task, key=task) # Unique key for every task
+                        st.checkbox(task, key=task)
 
             if st.button("🗑️ Clear Plan"):
                 del st.session_state["generated_roadmap"]
-                st.rerun()
-# ==========================================
+                st.rerun()# ==========================================
 # PAGE: FUNDRAISING (Pinterest/Instagram Style)
 # ==========================================
 elif st.session_state.page == "Fundraising":
@@ -315,7 +331,9 @@ elif st.session_state.page == "Fundraising":
                     "points": 0, 
                     "goal": new_goal,
                     # If no image uploaded, use a random one
-                    "image": "https://picsum.photos/400/300?random=99" if not uploaded_file else uploaded_file
+                    "image": "https://picsum.photos/400/300?random=99" if not uploaded_file else uploaded_file,
+                    "funded_by_investors": False,
+                    "investor_funding": 0
                 }
                 st.session_state.campaigns.append(new_camp)
                 st.success("Campaign Posted!")
@@ -332,7 +350,12 @@ elif st.session_state.page == "Fundraising":
                 "desc": "Replacing plastic wrap with organic beeswax sheets.",
                 "points": 850, 
                 "goal": 1000,
-                "image": "ecowraps.jpg"
+                "image": "ecowraps.jpg",
+                "funded_by_investors": False,
+                "investor_funding": 0,
+                "community_vouches": 42,
+                "monthly_revenue": 2500,
+                "months_in_business": 8
             },
             {
                 "name": "WoodToys", 
@@ -340,15 +363,25 @@ elif st.session_state.page == "Fundraising":
                 "desc": "Safe, non-toxic toys made from reclaimed wood.",
                 "points": 400, 
                 "goal": 1000,
-                "image": "woodtoys.jpg"
+                "image": "woodtoys.jpg",
+                "funded_by_investors": False,
+                "investor_funding": 0,
+                "community_vouches": 18,
+                "monthly_revenue": 1800,
+                "months_in_business": 5
             },
             {
                 "name": "KeralaSpices", 
                 "owner": "SpiceRoute", 
                 "desc": "Authentic homemade spice blends from Kerala.",
-                "points": 980, 
+                "points": 1200, 
                 "goal": 1000,
-                "image": "spices.jpg"
+                "image": "spices.jpg",
+                "funded_by_investors": False,
+                "investor_funding": 0,
+                "community_vouches": 65,
+                "monthly_revenue": 3200,
+                "months_in_business": 12
             },
         ]
 
@@ -373,6 +406,10 @@ elif st.session_state.page == "Fundraising":
                 st.progress(progress)
                 st.caption(f"🏆 {camp['points']} / {camp['goal']} Trust Points")
                 
+                # Show if investor-funded
+                if camp.get("funded_by_investors"):
+                    st.success(f"💼 Investor Funded: ${camp.get('investor_funding', 0)}")
+                
                 # INTERACTION BUTTONS
                 b1, b2 = st.columns(2)
                 
@@ -389,6 +426,10 @@ elif st.session_state.page == "Fundraising":
                             if st.session_state.points >= 10:
                                 st.session_state.points -= 10 # Cost to you
                                 st.session_state.campaigns[i]["points"] += 10 # Gain for them
+                                # Track community vouches
+                                if "community_vouches" not in st.session_state.campaigns[i]:
+                                    st.session_state.campaigns[i]["community_vouches"] = 0
+                                st.session_state.campaigns[i]["community_vouches"] += 1
                                 st.rerun()
                             else:
                                 st.error("Not enough points!")
@@ -397,6 +438,191 @@ elif st.session_state.page == "Fundraising":
                 with st.expander("💬 Comments"):
                     st.text_input("Add a comment...", key=f"com_{i}")
                     st.write("*Very cool project!* - @mike")
+
+# ==========================================
+# PAGE: INVESTOR PORTAL (NEW!)
+# ==========================================
+elif st.session_state.page == "Investor Portal":
+    
+    # --- HEADER ---
+    st.header("🏦 Investor Dashboard")
+    st.caption("Deploy capital to vetted small businesses and earn returns while building community impact.")
+    
+    st.divider()
+    
+    # --- PORTFOLIO OVERVIEW ---
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("💰 Liquidity Pool", f"${st.session_state.investor_pool:,.0f}", delta="Available")
+    
+    with col2:
+        total_invested = sum([inv['amount'] for inv in st.session_state.investor_investments])
+        st.metric("📊 Total Deployed", f"${total_invested:,.0f}")
+    
+    with col3:
+        active_investments = len(st.session_state.investor_investments)
+        st.metric("🎯 Active Investments", active_investments)
+    
+    with col4:
+        # Simulated returns (5% monthly return on deployed capital)
+        expected_returns = total_invested * 0.05
+        st.metric("💵 Expected Monthly Returns", f"${expected_returns:,.0f}", delta="5% ROI")
+    
+    st.divider()
+    
+    # --- LIQUIDITY POOL MANAGEMENT ---
+    with st.expander("💳 Manage Liquidity Pool"):
+        st.subheader("Add or Withdraw Capital")
+        
+        col_add, col_withdraw = st.columns(2)
+        
+        with col_add:
+            st.markdown("#### Add Funds")
+            add_amount = st.number_input("Amount to Add ($)", min_value=0, value=1000, step=100, key="add_funds")
+            if st.button("➕ Add to Pool"):
+                st.session_state.investor_pool += add_amount
+                st.success(f"Added ${add_amount:,.0f} to your liquidity pool!")
+                st.rerun()
+        
+        with col_withdraw:
+            st.markdown("#### Withdraw Funds")
+            withdraw_amount = st.number_input("Amount to Withdraw ($)", min_value=0, value=500, step=100, key="withdraw_funds")
+            if st.button("➖ Withdraw from Pool"):
+                if withdraw_amount <= st.session_state.investor_pool:
+                    st.session_state.investor_pool -= withdraw_amount
+                    st.success(f"Withdrew ${withdraw_amount:,.0f} from your pool!")
+                    st.rerun()
+                else:
+                    st.error("Insufficient funds in liquidity pool!")
+    
+    st.divider()
+    
+    # --- INVESTMENT OPPORTUNITIES ---
+    st.subheader("🔍 Investment-Ready Businesses")
+    st.caption("Businesses that have reached 1000+ Trust Points and meet funding criteria")
+    
+    # Filter campaigns that are eligible for investor funding
+    if "campaigns" not in st.session_state:
+        st.info("No businesses available yet. Check the Community Marketplace!")
+    else:
+        eligible_businesses = [
+            camp for camp in st.session_state.campaigns 
+            if camp["points"] >= 1000  # Must have reached trust point goal
+        ]
+        
+        if not eligible_businesses:
+            st.info("No businesses have reached the 1000 Trust Point threshold yet.")
+        else:
+            # Display as cards
+            for idx, business in enumerate(eligible_businesses):
+                with st.container(border=True):
+                    col_left, col_right = st.columns([2, 1])
+                    
+                    with col_left:
+                        # Business Details
+                        st.subheader(f"🌟 {business['name']}")
+                        st.caption(f"Owner: {business['owner']}")
+                        st.write(business['desc'])
+                        
+                        # Key Metrics
+                        met1, met2, met3 = st.columns(3)
+                        met1.metric("Trust Points", business['points'])
+                        met2.metric("Community Vouches", business.get('community_vouches', 0))
+                        met3.metric("Monthly Revenue", f"${business.get('monthly_revenue', 0):,.0f}")
+                        
+                        # Additional Info
+                        st.caption(f"⏰ In Business: {business.get('months_in_business', 0)} months")
+                        
+                        # Funding Status
+                        if business.get('funded_by_investors'):
+                            st.success(f"✅ Already Funded: ${business.get('investor_funding', 0):,.0f}")
+                        else:
+                            st.info("⏳ Awaiting investor funding")
+                    
+                    with col_right:
+                        # Investment Image
+                        if business.get("image"):
+                            st.image(business["image"], use_container_width=True)
+                        
+                        # Investment Action
+                        if not business.get('funded_by_investors'):
+                            st.markdown("#### Fund This Business")
+                            
+                            # Investment amount slider
+                            invest_amount = st.number_input(
+                                "Investment Amount ($)", 
+                                min_value=500, 
+                                max_value=10000, 
+                                value=2000, 
+                                step=500,
+                                key=f"invest_amount_{idx}"
+                            )
+                            
+                            # Expected ROI calculator
+                            expected_roi = invest_amount * 0.05
+                            st.caption(f"💡 Expected Monthly ROI: ${expected_roi:,.0f} (5%)")
+                            
+                            # Investment button
+                            if st.button(f"💼 Invest ${invest_amount:,.0f}", key=f"invest_btn_{idx}", type="primary"):
+                                if invest_amount <= st.session_state.investor_pool:
+                                    # Deduct from pool
+                                    st.session_state.investor_pool -= invest_amount
+                                    
+                                    # Mark business as funded
+                                    business_idx = st.session_state.campaigns.index(business)
+                                    st.session_state.campaigns[business_idx]['funded_by_investors'] = True
+                                    st.session_state.campaigns[business_idx]['investor_funding'] = invest_amount
+                                    
+                                    # Add to investment portfolio
+                                    st.session_state.investor_investments.append({
+                                        'business': business['name'],
+                                        'amount': invest_amount,
+                                        'date': pd.Timestamp.now().strftime("%Y-%m-%d"),
+                                        'status': 'Active'
+                                    })
+                                    
+                                    st.success(f"🎉 Successfully invested ${invest_amount:,.0f} in {business['name']}!")
+                                    st.balloons()
+                                    st.rerun()
+                                else:
+                                    st.error("Insufficient liquidity! Add more funds to your pool.")
+                        else:
+                            st.success("✅ Funded")
+                            st.caption("This business has received funding")
+    
+    st.divider()
+    
+    # --- MY INVESTMENTS ---
+    st.subheader("📋 My Investment Portfolio")
+    
+    if not st.session_state.investor_investments:
+        st.info("You haven't made any investments yet. Browse opportunities above!")
+    else:
+        # Create DataFrame
+        inv_df = pd.DataFrame(st.session_state.investor_investments)
+        
+        # Display as table
+        st.dataframe(
+            inv_df,
+            use_container_width=True,
+            column_config={
+                "business": "Business Name",
+                "amount": st.column_config.NumberColumn("Investment", format="$%d"),
+                "date": "Investment Date",
+                "status": "Status"
+            }
+        )
+        
+        # Summary metrics
+        col1, col2 = st.columns(2)
+        with col1:
+            total_inv = inv_df['amount'].sum()
+            st.metric("Total Invested", f"${total_inv:,.0f}")
+        with col2:
+            monthly_return = total_inv * 0.05
+            st.metric("Expected Monthly Return", f"${monthly_return:,.0f}")
+
 # ==========================================
 # PAGE: TRACKER
 # ==========================================
