@@ -210,7 +210,7 @@ elif st.session_state.page == "AI Assistant":
                             key_to_use = st.session_state.api_key
                             
                             # Using 1.5 Flash (Most reliable model)
-                            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key_to_use}"
+                            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key_to_use}"
                             headers = {'Content-Type': 'application/json'}
                             
                             prompt = f"""
